@@ -9,7 +9,8 @@
     "build:watch": "npx tsc -w -p tsconfig.json",
     "build:test": "npm run build && npm run test",
     "test": "jest --env=node",
-    "start": "node lib/init.js"
+    "start": "node lib/init.js",
+    "update": "git pull && npm ci && npm run build"
   },
   "repository": {
     "type": "git",
