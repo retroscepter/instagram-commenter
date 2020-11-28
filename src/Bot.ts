@@ -82,8 +82,9 @@ export class Bot {
     private async processFeed (): Promise<void> {   
         try {
             const items = await this.client.feed.timeline('pull_to_refresh').items()
+            const unlikedItems = items.filter(item => !item.has_liked)
             await this.processMediaItems(items)
-            await wait(60 * 1000 * (items.length === 0 ? 5 : 1))
+            await wait(60 * 1000 * (unlikedItems.length === 0 ? 8 : 1))
         } catch (error) {
             console.error(error)
             await wait(60 * 60 * 1000)
