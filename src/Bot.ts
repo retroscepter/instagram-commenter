@@ -114,23 +114,50 @@ export class Bot {
      * 
      * @private
      * 
-     * @param item Media item
+     * @param {TimelineFeedResponseMedia_or_ad} item Media item
      * 
      * @returns {Promise<void>} Fullfilled when the media item has been processed.
      */
     private async processMediaItem (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
+        /* Skip if the post is more than an hour old */
+
+        if (Date.now() - item.taken_at * 1000 > 60 * 60 * 1000) return
         if (item.has_liked) return
 
-        const mediaId = item.id
-        const text = this.randomComment()
-        const likeTimeout = (10 + (Math.random() * 6)) * 1000
-        const commentTimeout = (60 + (Math.random() * 30)) * 1000
+        await this.likeMedia(item)
+        await this.commentMedia(item)
+    }
 
+    /**
+     * Like a media item.
+     * 
+     * @private
+     * 
+     * @param {TimelineFeedResponseMedia_or_ad} item Media item
+     * 
+     * @returns {Promise<void>} Fullfilled when the media item has been liked. 
+     */
+    private async likeMedia (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
         try {
-            await this.client.media.like({ d: 1, mediaId, moduleInfo: { module_name: 'feed_timeline' }})
-            await wait(likeTimeout)
-            await this.client.media.comment({ mediaId, text })
-            await wait(commentTimeout)
+            await this.client.media.like({ d: 1, mediaId: item.id, moduleInfo: { module_name: 'feed_timeline' }})
+            await wait((60 + Math.floor(Math.random() * 60)) * 1000)
+        } catch (error) {
+            console.error(error)
+        }
+    }
+
+    /**
+     * Comment on a media item.
+     * 
+     * @param {TimelineFeedResponseMedia_or_ad} item Media item
+     * @param {string} [text] Comment text, random if not provided
+     * 
+     * @returns {Promise<void>} Fullfilled when the media item has been commented on.
+     */
+    private async commentMedia (item: TimelineFeedResponseMedia_or_ad, text?: string): Promise<void> {
+        try {
+            await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
+            await wait((60 + Math.floor(Math.random() * 60)) * 1000)
         } catch (error) {
             console.error(error)
             await wait(60 * 60 * 1000)
