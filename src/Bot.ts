@@ -1,5 +1,5 @@
 
-import { IgApiClient, TimelineFeedResponseMedia_or_ad } from 'instagram-private-api'
+import { IgActionSpamError, IgApiClient, TimelineFeedResponseMedia_or_ad } from 'instagram-private-api'
 
 /**
  * Bot configuration.
@@ -160,7 +160,7 @@ export class Bot {
             await wait((60 + Math.floor(Math.random() * 60)) * 1000)
         } catch (error) {
             console.error(error)
-            await wait(60 * 60 * 1000)
+            if (error instanceof IgActionSpamError) await wait(60 * 60 * 1000)
         }
     }
 
