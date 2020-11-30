@@ -48,6 +48,11 @@ program
 async function main () {
     /* Check if provided config file exists */
 
+    if (!program.config) {
+        console.log('Please specify a config file with the --config CLI option.')
+        process.exit(0)
+    }
+
     if (!fs.existsSync(program.config)) {
         console.log('Config file doesn\'t exist!')
         process.exit(0)
