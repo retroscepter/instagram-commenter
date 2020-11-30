@@ -2,15 +2,15 @@
   "name": "instagram-commenter",
   "version": "0.0.1",
   "description": "An API library for building Instagram comment bots.",
-  "bin": "lib/cli.js",
+  "bin": "bin/cli-linux",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
   "scripts": {
     "build": "npx tsc -p tsconfig.json",
     "build:watch": "npx tsc -w -p tsconfig.json",
-    "build:test": "npm run build && npm run test",
     "build:compile": "npm run build && npx pkg lib/cli.js --out-path bin",
-    "test": "npx jest --env=node",
+    "publish": "npm run build:compile && npm publish",
+    "test": "npm run build && npx jest --env=node",
     "start": "node lib/cli.js"
   },
   "repository": {
@@ -23,20 +23,19 @@
     "url": "https://github.com/chewyiscrunchy/instagram-commenter/issues"
   },
   "homepage": "https://github.com/chewyiscrunchy/instagram-commenter#readme",
-  "dependencies": {
-    "commander": "^6.2.0",
-    "inquirer": "^7.3.3",
-    "instagram-private-api": "^1.43.3",
-    "instagram-web-api": "^2.2.2",
-    "js-yaml": "^3.14.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/inquirer": "^7.3.1",
     "@types/js-yaml": "^3.12.5",
     "@types/luxon": "^1.25.0",
     "@types/node": "^14.14.10",
     "@types/tough-cookie": "^4.0.0",
+    "commander": "^6.2.0",
+    "inquirer": "^7.3.3",
+    "instagram-private-api": "^1.43.3",
     "jest": "^26.6.3",
+    "js-yaml": "^3.14.0",
+    "tslog": "^3.0.1",
     "typescript": "^4.1.2"
   }
 }

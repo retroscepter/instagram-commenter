@@ -6,10 +6,6 @@ import { Command } from 'commander'
 
 import { Bot } from '.'
 
-const { version } = require('../package.json')
-
-console.log(`Instagram Commenter v${version}`)
-
 /* Parse cli options */
 
 const program = new Command()
@@ -25,18 +21,16 @@ program.parse()
 /* Check if provided config file exists */
 
 if (!fs.existsSync(program.config)) {
-    console.log('Config file doesn\'t exist')
+    console.log('Config file doesn\'t exist!')
     process.exit(0)
 }
 
 /* Load config file */
 
-console.log('Loading config...')
-
 const loadedConfig = yaml.safeLoad(fs.readFileSync(program.config, 'utf-8'))
 
 if (typeof loadedConfig !== 'object' || !loadedConfig) {
-    console.log('Config file is invalid')
+    console.log('Config file is invalid!')
     process.exit(0)
 }
 
@@ -70,8 +64,6 @@ if (!config.password) prompts.push({ name: 'password', message: 'Password', type
 
     /* Load state file */
 
-    console.log('Loading state...')
-
     const stateFilePath = program.state
 
     if (stateFilePath && fs.existsSync(stateFilePath)) {
@@ -95,9 +87,7 @@ if (!config.password) prompts.push({ name: 'password', message: 'Password', type
         }
     })
 
-    bot.on('ready', () => {
-
-    })
+    /* Write state to state file if provided */
 
     bot.client.request.end$.subscribe(async () => {
         if (stateFilePath) {

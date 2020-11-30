@@ -1,4 +1,5 @@
 
+import { Logger } from 'tslog'
 import { EventEmitter } from 'events'
 import { IgActionSpamError, IgApiClient, TimelineFeedResponseMedia_or_ad } from 'instagram-private-api'
 
@@ -11,7 +12,6 @@ export type BotConfig = {
     comments: string[]
     whitelist?: string[]
     blacklist?: string[]
-    state?: any
 }
 
 /**
@@ -28,7 +28,6 @@ export function validateBotConfig (config?: BotConfig): BotConfig {
     if (!Array.isArray(config.comments)) throw new TypeError('Comments must be an array of strings')
     if (!Array.isArray(config.whitelist) && config.whitelist) throw new TypeError('Whitelist must be an array of strings')
     if (!Array.isArray(config.blacklist) && config.blacklist) throw new TypeError('Blacklist must be an array of strings')
-    if (config.state && typeof config.state !== 'object') throw new TypeError('State must be an object')
     return config
 }
 
@@ -66,6 +65,15 @@ export class Bot extends EventEmitter {
     public client: IgApiClient
 
     /**
+     * Logger.
+     * 
+     * @public
+     * 
+     * @type {Logger}
+     */
+    public logger: Logger
+
+    /**
      * Underlying queue array.
      * 
      * @private
@@ -83,6 +91,12 @@ export class Bot extends EventEmitter {
         super()
         this.config = validateBotConfig(config)
         this.client = new IgApiClient()
+        this.logger = new Logger({
+            name: this.config.username,
+            displayFilePath: 'hidden',
+            displayFunctionName: false,
+            type: 'pretty'
+        })
     }
 
     /**
@@ -94,7 +108,7 @@ export class Bot extends EventEmitter {
      */
     public async login (): Promise<void> {
         try {
-            console.log('Authenticating...')
+            this.logger.info('Authenticating...')
 
             if (!this.client.state.cookieUserId) {
                 this.client.state.generateDevice(this.config.username)
@@ -112,23 +126,44 @@ export class Bot extends EventEmitter {
             }
         }
 
+        this.logger.info(`Logged in as ${this.config.username}`)
+
         this.startTasks()
         this.emit('ready')
     }
 
+    /**
+     * Start automated tasks.
+     * 
+     * @private
+     * 
+     * @returns {Promise<void>} Fullfilled when the tasks are started.
+     */
     private async startTasks (): Promise<void> {
-        this.getFeed()
-        this.processQueue()
+        await this.processQueue()
+        await this.getFeed()
     }
 
+    /**
+     * Get all posts in the feed and add them to the queue.
+     * 
+     * @public
+     * 
+     * @returns {Promise<void>} Fullfilled when the posts are added to the queue.
+     */
     public async getFeed (): Promise<void> {
-        if (this.queue.length > 0) {
-            setTimeout(this.getFeed.bind(this), 1000 * 60)
-            return
-        }        
-
-        const items = await this.client.feed.timeline().items()
-        for (const item of items) this.queueItem(item)
+        try {
+            const items = await this.client.feed.timeline().items()
+            const filtered = items.filter(item => !item.has_liked)
+            for (const item of filtered) await this.queueItem(item)
+            this.logger.info(`Refreshed feed and queued ${filtered.length} items`)
+        } catch (error) {
+            if (error instanceof IgActionSpamError) {
+                await this.ratelimit()
+            } else {
+                this.logger.warn(`Couldn't refresh feed`)
+            }
+        }
 
         setTimeout(this.getFeed.bind(this), 1000 * 60 * 10)
     }
@@ -143,8 +178,6 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled when the media item has been processed.
      */
     private async processMediaItem (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
-        /* Skip if the post is more than an hour old */
-
         if (item.has_liked) return
 
         await this.likeMedia(item)
@@ -163,9 +196,10 @@ export class Bot extends EventEmitter {
     private async likeMedia (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
         try {
             await this.client.media.like({ d: 1, mediaId: item.id, moduleInfo: { module_name: 'feed_timeline' }})
+            await this.logger.info(`Liked post by ${item.user.username}`)
             await wait((60 + Math.floor(Math.random() * 60)) * 1000)
         } catch (error) {
-            console.error(error)
+            this.logger.warn(`Couldn't like post by ${item.user.username}`)
         }
     }
 
@@ -180,23 +214,52 @@ export class Bot extends EventEmitter {
     private async commentMedia (item: TimelineFeedResponseMedia_or_ad, text?: string): Promise<void> {
         try {
             await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
+            await this.logger.info(`Commented on post by ${item.user.username}`)
             await wait((60 + Math.floor(Math.random() * 60)) * 1000)
         } catch (error) {
-            console.error(error)
-            if (error instanceof IgActionSpamError) await wait(60 * 60 * 1000)
+            if (error instanceof IgActionSpamError) {
+                await this.ratelimit()
+            } else {
+                this.logger.warn(`Couldn't comment on post by ${item.user.username}`)
+            }
         }
     }
 
-    public queueItem (item: TimelineFeedResponseMedia_or_ad): void {
+    /**
+     * Add a media item to the queue.
+     * 
+     * @public
+     * 
+     * @param {TimelineFeedResponseMedia_or_ad} item Media item
+     * 
+     * @returns {Promise<void>} Fullfilled after the item is queued.
+     */
+    public async queueItem (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
         if (this.queue.some(i => i.id === item.id)) return
         this.queue.push(item)
     }
 
-    public unqueueItem (item: string | TimelineFeedResponseMedia_or_ad): void {
+    /**
+     * Remove a media item from the queue.
+     * 
+     * @public
+     * 
+     * @param {string | TimelineFeedResponseMedia_or_ad} item Media item or media ID
+     * 
+     * @returns {Promise<void>} Fullfilled after the item is removed.
+     */
+    public async unqueueItem (item: string | TimelineFeedResponseMedia_or_ad): Promise<void> {
         const index = this.queue.findIndex(i => i === item || i.id === item)
         if (index !== -1) this.queue.splice(index, 1)
     }
 
+    /**
+     * Process the next item in the queue.
+     * 
+     * @public
+     * 
+     * @returns {Promise<void>} Fullfilled when the item is processed.
+     */
     public async processQueue (): Promise<void> {
         const sorted = this.queue.sort((a, b) => b.taken_at - a.taken_at)
         const item = sorted[0]
@@ -206,8 +269,7 @@ export class Bot extends EventEmitter {
             return
         }
 
-        this.unqueueItem(item)
-
+        await this.unqueueItem(item)
         await this.processMediaItem(item)
         setTimeout(this.processQueue.bind(this), 0)
     }
@@ -220,16 +282,18 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled when the challenge is solved.
      */
     public async solveChallenge (): Promise<void> {
-        console.log('Reading checkpoint...')
+        this.logger.info('Reading checkpoint...')
 
         await this.client.challenge.state()
         await this.client.challenge.auto()
         return new Promise((resolve, reject) => {
             this.emit('challenge', async (securityCode: string | number) => {
                 try {
+                    this.logger.info('Solving checkpoint...')
                     await this.client.challenge.sendSecurityCode(securityCode)
                     resolve()
                 } catch (error) {
+                    this.logger.warn('Security code is incorrect, please try again.')
                     reject(error)
                 }
             })
@@ -245,5 +309,19 @@ export class Bot extends EventEmitter {
      */
     private randomComment (): string {
         return this.config.comments[Math.floor(Math.random() * this.config.comments.length)]
+    }
+
+    /**
+     * Logs a ratelimit error and waits the specified time.
+     * 
+     * @private
+     * 
+     * @param {number} [ms] Timeout in milliseconds, defaults to an hour
+     * 
+     * @returns {Promise<void>} Fullfilled after the timeout. 
+     */
+    private async ratelimit (ms?: number): Promise<void> {
+        this.logger.warn('You have been ratelimited, pausing activity for an hour')
+        await wait(ms || 60 * 60 * 1000)
     }
 }
