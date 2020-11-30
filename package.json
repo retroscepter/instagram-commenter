@@ -12,7 +12,7 @@
     "build": "npx tsc -p tsconfig.json",
     "build:watch": "npx tsc -w -p tsconfig.json",
     "build:compile": "npm run build && npx pkg lib/cli.js --out-path bin",
-    "publish": "npm run build:compile && npm publish",
+    "prepare": "npm run build:compile",
     "test": "npm run build && npx jest --env=node",
     "start": "node lib/cli.js"
   },
