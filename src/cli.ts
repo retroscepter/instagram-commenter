@@ -1,5 +1,7 @@
+#!/usr/bin/env node
 
 import fs from 'fs'
+import path from 'path'
 import yaml from 'js-yaml'
 import inquirer from 'inquirer'
 import { Command } from 'commander'
@@ -11,48 +13,71 @@ import { Bot } from '.'
 const program = new Command()
 
 program
+    .description('Starts the Instagram Commenter')
     .option('-u, --username [username]', 'Instagram account username')
     .option('-p, --password [password]', 'Instagram account password')
     .option('-c, --config <config>', 'Config file path')
     .option('-s, --state [state]', 'State cache path')
+    .action(() => main())
+    .command('init')
+    .description('Creates a new config file in the current working directory')
+    .option('-f, --force', 'Overwrite any existing config file')
+    .action(async (cmd) => {
+        /* Load default config */
 
-program.parse()
+        const defaultConfigPath = path.join(__dirname, '../assets/default.config.yml')
+        const newConfigPath = path.join(process.cwd(), 'config.yml')
 
-/* Check if provided config file exists */
+        /* Check if current config exists */
 
-if (!fs.existsSync(program.config)) {
-    console.log('Config file doesn\'t exist!')
-    process.exit(0)
-}
+        if (!cmd.force && fs.existsSync(newConfigPath)) {
+            const { overwrite } = await inquirer.prompt([{ name: 'overwrite', message: 'Overwrite existing config.yml?', type: 'confirm' }])
+            if (!overwrite) process.exit(0)
+        }
 
-/* Load config file */
+        /* Write config file */
 
-const loadedConfig = yaml.safeLoad(fs.readFileSync(program.config, 'utf-8'))
+        const data = fs.readFileSync(defaultConfigPath, 'utf-8')
+        fs.writeFileSync(newConfigPath, data)
 
-if (typeof loadedConfig !== 'object' || !loadedConfig) {
-    console.log('Config file is invalid!')
-    process.exit(0)
-}
-
-/* Create initial config */
-
-const config = {
-    username: process.env.USERNAME || program.username,
-    password: process.env.PASSWORD || program.password,
-    comments: [],
-    ...loadedConfig
-}
-
-/* Create prompts */
-
-const prompts: inquirer.Question[] = []
-
-if (!config.username) prompts.push({ name: 'username', message: 'Username', type: 'input' })
-if (!config.password) prompts.push({ name: 'password', message: 'Password', type: 'password' })
+        console.log(`New config written to ${newConfigPath}`)
+    })
 
 /* Main function */
 
-;(async () => {
+async function main () {
+    /* Check if provided config file exists */
+
+    if (!fs.existsSync(program.config)) {
+        console.log('Config file doesn\'t exist!')
+        process.exit(0)
+    }
+
+    /* Load config file */
+
+    const loadedConfig = yaml.safeLoad(fs.readFileSync(program.config, 'utf-8'))
+
+    if (typeof loadedConfig !== 'object' || !loadedConfig) {
+        console.log('Config file is invalid!')
+        process.exit(0)
+    }
+
+    /* Create initial config */
+
+    const config = {
+        username: process.env.USERNAME || program.username,
+        password: process.env.PASSWORD || program.password,
+        comments: [],
+        ...loadedConfig
+    }
+
+    /* Create prompts */
+
+    const prompts: inquirer.Question[] = []
+
+    if (!config.username) prompts.push({ name: 'username', message: 'Username', type: 'input' })
+    if (!config.password) prompts.push({ name: 'password', message: 'Password', type: 'password' })
+
     const answers = await inquirer.prompt(prompts)
 
     /* Update credentials from prompt answers */
@@ -100,4 +125,6 @@ if (!config.password) prompts.push({ name: 'password', message: 'Password', type
     /* Start the bot */
 
     await bot.login()
-})()
+}
+
+program.parse()

@@ -2,13 +2,16 @@
   "name": "instagram-commenter",
   "version": "0.0.1",
   "description": "An API library for building Instagram comment bots.",
-  "bin": "bin/cli-linux",
+  "bin": "lib/cli.js",
   "main": "lib/index.js",
   "types": "lib/index.d.ts",
+  "pkg": {
+    "assets": "assets/**/*"
+  },
   "scripts": {
     "build": "npx tsc -p tsconfig.json",
     "build:watch": "npx tsc -w -p tsconfig.json",
-    "build:compile": "npm run build && npx pkg lib/cli.js --out-path bin",
+    "build:compile": "npm run build && npx pkg package.json --out-path bin",
     "publish": "npm run build:compile && npm publish",
     "test": "npm run build && npx jest --env=node",
     "start": "node lib/cli.js"
