@@ -1,2 +1,5 @@
 tests
+config.yml
+state.json
 src
+bin

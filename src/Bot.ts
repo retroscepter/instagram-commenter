@@ -110,7 +110,16 @@ export class Bot extends EventEmitter {
         try {
             this.logger.info('Authenticating...')
 
-            if (!this.client.state.cookieUserId) {
+            let hasCookies = false
+
+            try {
+                this.client.state.cookieUserId
+                hasCookies = true
+            } catch {
+                hasCookies = false
+            }
+
+            if (!hasCookies) {
                 this.client.state.generateDevice(this.config.username)
                 await this.client.simulate.preLoginFlow()
                 await this.client.account.login(this.config.username, this.config.password)
@@ -195,9 +204,10 @@ export class Bot extends EventEmitter {
      */
     private async likeMedia (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
         try {
+            const timeout = (10 + Math.floor(Math.random() * 10)) * 1000
             await this.client.media.like({ d: 1, mediaId: item.id, moduleInfo: { module_name: 'feed_timeline' }})
-            await this.logger.info(`Liked post by ${item.user.username}`)
-            await wait((60 + Math.floor(Math.random() * 60)) * 1000)
+            await this.logger.info(`Liked post by ${item.user.username}, waiting ${timeout / 1000} seconds`)
+            await wait(timeout)
         } catch (error) {
             this.logger.warn(`Couldn't like post by ${item.user.username}`)
         }
@@ -213,9 +223,10 @@ export class Bot extends EventEmitter {
      */
     private async commentMedia (item: TimelineFeedResponseMedia_or_ad, text?: string): Promise<void> {
         try {
+            const timeout = (60 + Math.floor(Math.random() * 60)) * 1000
             await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
-            await this.logger.info(`Commented on post by ${item.user.username}`)
-            await wait((60 + Math.floor(Math.random() * 60)) * 1000)
+            await this.logger.info(`Commented on post by ${item.user.username}, waiting ${timeout / 1000} seconds`)
+            await wait(timeout)
         } catch (error) {
             if (error instanceof IgActionSpamError) {
                 await this.ratelimit()
