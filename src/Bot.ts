@@ -1,4 +1,5 @@
 
+import { EventEmitter } from 'events'
 import { IgActionSpamError, IgApiClient, TimelineFeedResponseMedia_or_ad } from 'instagram-private-api'
 
 /**
@@ -10,6 +11,7 @@ export type BotConfig = {
     comments: string[]
     whitelist?: string[]
     blacklist?: string[]
+    state?: any
 }
 
 /**
@@ -26,6 +28,7 @@ export function validateBotConfig (config?: BotConfig): BotConfig {
     if (!Array.isArray(config.comments)) throw new TypeError('Comments must be an array of strings')
     if (!Array.isArray(config.whitelist) && config.whitelist) throw new TypeError('Whitelist must be an array of strings')
     if (!Array.isArray(config.blacklist) && config.blacklist) throw new TypeError('Blacklist must be an array of strings')
+    if (config.state && typeof config.state !== 'object') throw new TypeError('State must be an object')
     return config
 }
 
@@ -43,9 +46,33 @@ export function wait (ms: number): Promise<void> {
 /**
  * Represents an Instagram comment bot.
  */
-export class Bot {
-    config: BotConfig
-    client: IgApiClient
+export class Bot extends EventEmitter {
+    /**
+     * Bot configuration.
+     * 
+     * @public
+     * 
+     * @type {BotConfig}
+     */
+    public config: BotConfig
+
+    /**
+     * Underlying Instagram API client.
+     * 
+     * @public
+     * 
+     * @type {IgApiClient}
+     */
+    public client: IgApiClient
+
+    /**
+     * Underlying queue array.
+     * 
+     * @private
+     * 
+     * @type {TimelineFeedResponseMedia_or_ad[]}
+     */
+    public queue: TimelineFeedResponseMedia_or_ad[] = []
 
     /**
      * Create an Instagram comment bot.
@@ -53,6 +80,7 @@ export class Bot {
      * @param {BotConfig} config Bot configuration
      */
     constructor (config?: BotConfig) {
+        super()
         this.config = validateBotConfig(config)
         this.client = new IgApiClient()
     }
@@ -65,48 +93,44 @@ export class Bot {
      * @returns {Promise<void>} Fullfilled when the Bot has logged in.
      */
     public async login (): Promise<void> {
-        this.client.state.generateDevice(this.config.username)
-        await this.client.simulate.preLoginFlow()
-        await this.client.account.login(this.config.username, this.config.password)
-        await this.client.simulate.postLoginFlow()
-        await this.processFeed()
-    }
-
-    /**
-     * Get posts from feed and process them.
-     * 
-     * @private
-     * 
-     * @returns {Promise<void>} Fullfilled when all of the posts are processed.
-     */
-    private async processFeed (): Promise<void> {   
         try {
-            const items = await this.client.feed.timeline('pull_to_refresh').items()
-            const unlikedItems = items.filter(item => !item.has_liked)
-            await this.processMediaItems(items)
-            await wait(60 * 1000 * (unlikedItems.length === 0 ? 8 : 1))
+            console.log('Authenticating...')
+
+            if (!this.client.state.cookieUserId) {
+                this.client.state.generateDevice(this.config.username)
+                await this.client.simulate.preLoginFlow()
+                await this.client.account.login(this.config.username, this.config.password)
+                await this.client.simulate.postLoginFlow()
+            }
         } catch (error) {
-            console.error(error)
-            await wait(60 * 60 * 1000)
+            if (error.message.includes('challenge_required')) {
+                await this.solveChallenge()
+                return this.login()
+            } else {
+                console.error(error)
+                process.exit(0)
+            }
         }
 
-        this.processFeed()
+        this.startTasks()
+        this.emit('ready')
     }
 
+    private async startTasks (): Promise<void> {
+        this.getFeed()
+        this.processQueue()
+    }
 
-    /**
-     * Process an array of media items.
-     * 
-     * @private
-     * 
-     * @param {TimelineFeedResponseMedia_or_ad[]} items Array of media items
-     * 
-     * @returns {Promise<void>} Fullfilled when the items are processed.
-     */
-    private async processMediaItems (items: TimelineFeedResponseMedia_or_ad[]): Promise<void> {
-        for (const item of items) {
-            await this.processMediaItem(item)
-        }
+    public async getFeed (): Promise<void> {
+        if (this.queue.length > 0) {
+            setTimeout(this.getFeed.bind(this), 1000 * 60)
+            return
+        }        
+
+        const items = await this.client.feed.timeline().items()
+        for (const item of items) this.queueItem(item)
+
+        setTimeout(this.getFeed.bind(this), 1000 * 60 * 10)
     }
 
     /**
@@ -121,7 +145,6 @@ export class Bot {
     private async processMediaItem (item: TimelineFeedResponseMedia_or_ad): Promise<void> {
         /* Skip if the post is more than an hour old */
 
-        if (Date.now() - item.taken_at * 1000 > 60 * 60 * 1000) return
         if (item.has_liked) return
 
         await this.likeMedia(item)
@@ -162,6 +185,55 @@ export class Bot {
             console.error(error)
             if (error instanceof IgActionSpamError) await wait(60 * 60 * 1000)
         }
+    }
+
+    public queueItem (item: TimelineFeedResponseMedia_or_ad): void {
+        if (this.queue.some(i => i.id === item.id)) return
+        this.queue.push(item)
+    }
+
+    public unqueueItem (item: string | TimelineFeedResponseMedia_or_ad): void {
+        const index = this.queue.findIndex(i => i === item || i.id === item)
+        if (index !== -1) this.queue.splice(index, 1)
+    }
+
+    public async processQueue (): Promise<void> {
+        const sorted = this.queue.sort((a, b) => b.taken_at - a.taken_at)
+        const item = sorted[0]
+
+        if (!item) {
+            setTimeout(this.processQueue.bind(this), 1000)
+            return
+        }
+
+        this.unqueueItem(item)
+
+        await this.processMediaItem(item)
+        setTimeout(this.processQueue.bind(this), 0)
+    }
+
+    /**
+     * Start a checkpoint challenge flow.
+     * 
+     * @private
+     * 
+     * @returns {Promise<void>} Fullfilled when the challenge is solved.
+     */
+    public async solveChallenge (): Promise<void> {
+        console.log('Reading checkpoint...')
+
+        await this.client.challenge.state()
+        await this.client.challenge.auto()
+        return new Promise((resolve, reject) => {
+            this.emit('challenge', async (securityCode: string | number) => {
+                try {
+                    await this.client.challenge.sendSecurityCode(securityCode)
+                    resolve()
+                } catch (error) {
+                    reject(error)
+                }
+            })
+        })
     }
 
     /**
