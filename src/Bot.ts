@@ -162,8 +162,8 @@ export class Bot extends EventEmitter {
      */
     public async getFeed (): Promise<void> {
         try {
-            const items = await this.client.feed.timeline().items()
-            const filtered = items.filter(item => !item.has_liked)
+            const items = await this.client.feed.timeline('pull_to_refresh').items()
+            const filtered = items.filter(item => !item.has_liked && !item.ad_id)
             for (const item of filtered) await this.queueItem(item)
             this.logger.info(`Refreshed feed and queued ${filtered.length} items`)
         } catch (error) {
@@ -174,7 +174,7 @@ export class Bot extends EventEmitter {
             }
         }
 
-        setTimeout(this.getFeed.bind(this), 1000 * 60 * 10)
+        setTimeout(this.getFeed.bind(this), 1000 * 60 * 5)
     }
 
     /**
@@ -297,6 +297,7 @@ export class Bot extends EventEmitter {
 
         await this.client.challenge.state()
         await this.client.challenge.auto()
+
         return new Promise((resolve, reject) => {
             this.emit('challenge', async (securityCode: string | number) => {
                 try {
