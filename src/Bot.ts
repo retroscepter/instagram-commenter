@@ -10,6 +10,11 @@ export type BotConfig = {
     username: string
     password: string
     comments: string[]
+    minLikeTimeout?: number
+    maxLikeTimeout?: number
+    minCommentTimeout?: number
+    maxCommentTimeout?: number
+    feedRefreshInterval?: number
     whitelist?: string[]
     blacklist?: string[]
 }
@@ -21,10 +26,10 @@ export type BotConfig = {
  * 
  * @returns {BotConfig} Bot configuration.
  */
-export function validateBotConfig (config?: BotConfig): BotConfig {
-    if (typeof config !== 'object' || config === null) throw new TypeError('Bot configuration must be an object')
-    if (typeof config.username !== 'string' && !config.username) throw new TypeError('Username must be a string')
-    if (typeof config.password !== 'string' && !config.password) throw new TypeError('Password must be a string')
+export function validateBotConfig (config: BotConfig): BotConfig {
+    if (typeof config !== 'object' || config === null || !config) throw new TypeError('Bot configuration must be an object')
+    if (typeof config.username !== 'string' || !config.username) throw new TypeError('Username must be a string')
+    if (typeof config.password !== 'string' || !config.password) throw new TypeError('Password must be a string')
     if (!Array.isArray(config.comments)) throw new TypeError('Comments must be an array of strings')
     if (!Array.isArray(config.whitelist) && config.whitelist) throw new TypeError('Whitelist must be an array of strings')
     if (!Array.isArray(config.blacklist) && config.blacklist) throw new TypeError('Blacklist must be an array of strings')
@@ -41,6 +46,24 @@ export function validateBotConfig (config?: BotConfig): BotConfig {
 export function wait (ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms))
 }
+
+/**
+ * Random number helper.
+ * 
+ * @param from Starting range
+ * @param to Ending range
+ * 
+ * @returns {number} Random number between starting and ending range.
+ */
+export function rand (from: number, to: number): number {
+    return from + Math.floor(Math.random() * (to - from))
+}
+
+const MIN_LIKE_TIMEOUT = 10
+const MAX_LIKE_TIMEOUT = 30
+const MIN_COMMENT_TIMEOUT = 60
+const MAX_COMMENT_TIMEOUT = 180
+const FEED_REFRESH_INTERVAL = 5
 
 /**
  * Represents an Instagram comment bot.
@@ -60,7 +83,7 @@ export class Bot extends EventEmitter {
      * 
      * @public
      * 
-     * @type {IgApiClient}
+     * @type {Client}
      */
     public client: Client
 
@@ -87,7 +110,7 @@ export class Bot extends EventEmitter {
      * 
      * @param {BotConfig} config Bot configuration
      */
-    constructor (config?: BotConfig) {
+    constructor (config: BotConfig) {
         super()
         this.config = validateBotConfig(config)
         this.client = new Client({
@@ -156,7 +179,8 @@ export class Bot extends EventEmitter {
             this.logger.warn(error)
         }
 
-        setTimeout(this.getFeed.bind(this), 1000 * 60 * 5)
+        const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
+        setTimeout(this.getFeed.bind(this), timeout)
     }
 
     /**
@@ -186,7 +210,10 @@ export class Bot extends EventEmitter {
      */
     private async likeMedia (item: Media): Promise<void> {
         try {
-            const timeout = (10 + Math.floor(Math.random() * 10)) * 1000
+            const timeout = rand(
+                (this.config.minLikeTimeout || MIN_LIKE_TIMEOUT) * 1000,
+                (this.config.maxLikeTimeout || MAX_LIKE_TIMEOUT) * 1000
+            )
             await this.client.media.like({ mediaId: item.id, doubleTap: true, module: { name: 'feed_timeline' }})
             await this.logger.info(`Liked post by ${item.user?.username}, waiting ${timeout / 1000} seconds`)
             await wait(timeout)
@@ -206,7 +233,10 @@ export class Bot extends EventEmitter {
      */
     private async commentMedia (item: Media, text?: string): Promise<void> {
         try {
-            const timeout = (60 + Math.floor(Math.random() * 60)) * 1000
+            const timeout = rand(
+                (this.config.minCommentTimeout || MIN_COMMENT_TIMEOUT) * 1000,
+                (this.config.maxCommentTimeout || MAX_COMMENT_TIMEOUT) * 1000
+            )
             await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
             await this.logger.info(`Commented on post by ${item.user?.username}, waiting ${timeout / 1000} seconds`)
             await wait(timeout)

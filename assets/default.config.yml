@@ -1,6 +1,11 @@
-username: instagram
-password: password
-comments:
+username: instagram       # Instagram username
+password: password        # Instagram password
+minLikeTimeout: 10        # Minimum timeout after each like (in seconds)
+maxLikeTimeout: 30        # Maximum timeout after each like (in seconds)
+minCommentTimeout: 60     # Minimum timeout after each comment (in seconds)
+maxCommentTimeout: 180    # Maximum timeout after each comment (in seconds)
+feedRefreshInterval: 5    # Feed refresh interval (in minutes)
+comments:                 # List of comments to use
 - hi
 - hey
 - hello
