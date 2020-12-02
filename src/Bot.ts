@@ -178,7 +178,7 @@ export class Bot extends EventEmitter {
             this.logger.info(`Refreshed feed and queued ${this.queue.length - count} items, next in ${Math.round(timeout / 1000)}s`)
         } catch (error) {
             this.logger.warn(`Couldn't refresh feed`)
-            this.logger.warn(error)
+            console.warn(error)
         }
 
         setTimeout(this.getFeed.bind(this), timeout)
@@ -220,7 +220,7 @@ export class Bot extends EventEmitter {
             await wait(timeout)
         } catch (error) {
             this.logger.warn(`Couldn't like post by ${item.user?.username}`)
-            this.logger.warn(error)
+            console.warn(error)
         }
     }
 
@@ -243,7 +243,7 @@ export class Bot extends EventEmitter {
             await wait(timeout)
         } catch (error) {
             this.logger.warn(`Couldn't comment on post by ${item.user?.username}`)
-            this.logger.warn(error)
+            console.warn(error)
         }
     }
 
@@ -293,8 +293,14 @@ export class Bot extends EventEmitter {
             return
         }
 
-        await this.unqueueItem(item)
-        await this.processMediaItem(item)
+        try {
+            await this.unqueueItem(item)
+            await this.processMediaItem(item)
+        } catch (error) {
+            this.logger.warn(`Couldn't process queue item, skipping`)
+            console.warn(error)
+        }
+
         setTimeout(this.processQueue.bind(this), 0)
     }
 
