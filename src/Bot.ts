@@ -199,18 +199,13 @@ export class Bot extends EventEmitter {
      */
     public async getFeed (): Promise<void> {
         const count = this.queue.length
-        let timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
+        const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
 
         try {
             const items = await this.client.timeline.get({ reason: 'pull_to_refresh' })
             for (const item of items) await this.queueItem(item)
+            this.logger.info(`Refreshed feed and queued ${this.queue.length - count} items, next in ${prettyTime(timeout)}`)
             this.resetRatelimit()
-
-            const addedCount = this.queue.length - count
-            const timeoutMultipler = Math.max(1, (Math.max(8, addedCount) - addedCount) * 0.3)
-            timeout = timeout * timeoutMultipler
-
-            this.logger.info(`Refreshed feed and queued ${addedCount} items, next in ${prettyTime(timeout)}`)
         } catch (error) {
             await this.checkError(error, 'Couldn\'t refresh feed')
         }
