@@ -99,7 +99,7 @@ async function main () {
     if (stateFilePath && fs.existsSync(stateFilePath)) {
         try {
             const state = fs.readFileSync(stateFilePath, 'utf-8')
-            await bot.client.state.deserialize(state)
+            await bot.client.state.import(JSON.parse(state))
         } catch (error) {
             console.log('State cache file is invalid')
             process.exit(0)
@@ -108,21 +108,18 @@ async function main () {
 
     /* Prompt for security code to solve challenges */
 
-    bot.on('challenge', async function askForCode (solve) {
-        try {
-            const answers = await inquirer.prompt([{ name: 'securityCode', message: 'Security code', type: 'input' }])
-            await solve(answers.securityCode)
-        } catch {
-            askForCode(solve)
-        }
+    bot.client.on('challenge', async function askForCode (challenge) {
+        await challenge.reset()
+        await challenge.selectMethod()
+        const answers = await inquirer.prompt([{ name: 'code', message: 'Security code', type: 'input' }])
+        await challenge.solve(answers.code)
     })
 
     /* Write state to state file if provided */
 
-    bot.client.request.end$.subscribe(async () => {
+    bot.client.on('request', async () => {
         if (stateFilePath) {
-            const state = await bot.client.state.serialize()
-            delete state.constants
+            const state = await bot.client.state.export()
             fs.writeFileSync(stateFilePath, JSON.stringify(state))
         }
     })
