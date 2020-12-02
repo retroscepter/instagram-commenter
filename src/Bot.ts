@@ -172,10 +172,10 @@ export class Bot extends EventEmitter {
         const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
 
         try {
+            const count = this.queue.length
             const items = await this.client.timeline.get({ reason: 'pull_to_refresh' })
-            const filtered = items.filter(item => !item.liked)
-            for (const item of filtered) await this.queueItem(item)
-            this.logger.info(`Refreshed feed and queued ${filtered.length} items, next in ${Math.round(timeout / 1000)}s`)
+            for (const item of items) await this.queueItem(item)
+            this.logger.info(`Refreshed feed and queued ${this.queue.length - count} items, next in ${Math.round(timeout / 1000)}s`)
         } catch (error) {
             this.logger.warn(`Couldn't refresh feed`)
             this.logger.warn(error)
@@ -258,6 +258,8 @@ export class Bot extends EventEmitter {
      */
     public async queueItem (item: Media): Promise<void> {
         if (this.queue.some(i => i.id === item.id)) return
+        if (item.liked) return
+        if (item.adId) return
         this.queue.push(item)
     }
 

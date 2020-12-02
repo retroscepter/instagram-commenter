@@ -29,7 +29,7 @@
   "dependencies": {
     "commander": "^6.2.0",
     "inquirer": "^7.3.3",
-    "instagram-connect": "0.0.11",
+    "instagram-connect": "0.0.12",
     "js-yaml": "^3.14.0",
     "tslog": "^3.0.1"
   },
