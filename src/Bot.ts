@@ -2,12 +2,15 @@
 import { Logger } from 'tslog'
 import { EventEmitter } from 'events'
 import { Client, Media } from 'instagram-connect'
+import { time } from 'console'
 
 const MIN_LIKE_TIMEOUT = 10
 const MAX_LIKE_TIMEOUT = 30
 const MIN_COMMENT_TIMEOUT = 60
 const MAX_COMMENT_TIMEOUT = 180
 const FEED_REFRESH_INTERVAL = 5
+const RATELIMIT_TIMEOUT = 1000 * 60 * 30
+const RATELIMIT_MULT = 1.5
 
 /**
  * Bot configuration.
@@ -66,6 +69,23 @@ export function rand (from: number, to: number): number {
 }
 
 /**
+ * Convert millisecond time to 0h 0m 0s format.
+ * 
+ * @param s Time in milliseconds
+ * 
+ * @returns {string} Formatted time.
+ */
+export function prettyTime (s: number): string {
+    let ms = s % 1000
+    s = (s - ms) / 1000
+    let secs = s % 60
+    s = (s - secs) / 60
+    let mins = s % 60
+    let hrs = (s - mins) / 60
+    return (hrs ? `${hrs}h ` : '') + (mins ? `${mins}m ` : '') + `${secs}s`
+}
+
+/**
  * Represents an Instagram comment bot.
  */
 export class Bot extends EventEmitter {
@@ -104,6 +124,15 @@ export class Bot extends EventEmitter {
      * @type {Media[]}
      */
     public queue: Media[] = []
+
+    /**
+     * Ratelimit timeout, grows exponentionally.
+     * 
+     * @private
+     * 
+     * @type {number}
+     */
+    private ratelimitTimeout: number = RATELIMIT_TIMEOUT
 
     /**
      * Create an Instagram comment bot.
@@ -169,16 +198,21 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled when the posts are added to the queue.
      */
     public async getFeed (): Promise<void> {
-        const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
+        const count = this.queue.length
+        let timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
 
         try {
-            const count = this.queue.length
             const items = await this.client.timeline.get({ reason: 'pull_to_refresh' })
             for (const item of items) await this.queueItem(item)
-            this.logger.info(`Refreshed feed and queued ${this.queue.length - count} items, next in ${Math.round(timeout / 1000)}s`)
+            this.resetRatelimit()
+
+            const addedCount = this.queue.length - count
+            const timeoutMultipler = Math.max(1, (Math.max(8, addedCount) - addedCount) * 0.3)
+            timeout = timeout * timeoutMultipler
+
+            this.logger.info(`Refreshed feed and queued ${addedCount} items, next in ${prettyTime(timeout)}`)
         } catch (error) {
-            this.logger.warn(`Couldn't refresh feed`)
-            console.warn(error)
+            await this.checkError(error, 'Couldn\'t refresh feed')
         }
 
         setTimeout(this.getFeed.bind(this), timeout)
@@ -216,11 +250,11 @@ export class Bot extends EventEmitter {
                 (this.config.maxLikeTimeout || MAX_LIKE_TIMEOUT) * 1000
             )
             await this.client.media.like({ mediaId: item.id, doubleTap: true, module: { name: 'feed_timeline' }})
-            await this.logger.info(`Liked post by ${item.user?.username}, waiting ${Math.round(timeout / 1000)}s`)
+            await this.logger.info(`Liked post by ${item.user?.username}, waiting ${prettyTime(timeout)}`)
             await wait(timeout)
+            this.resetRatelimit()
         } catch (error) {
-            this.logger.warn(`Couldn't like post by ${item.user?.username}`)
-            console.warn(error)
+            await this.checkError(error, `Couldn't like post by ${item.user?.username}`)
         }
     }
 
@@ -239,11 +273,11 @@ export class Bot extends EventEmitter {
                 (this.config.maxCommentTimeout || MAX_COMMENT_TIMEOUT) * 1000
             )
             await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
-            await this.logger.info(`Commented on post by ${item.user?.username}, waiting ${Math.round(timeout / 1000)}s`)
+            await this.logger.info(`Commented on post by ${item.user?.username}, waiting ${prettyTime(timeout)}`)
             await wait(timeout)
+            this.resetRatelimit()
         } catch (error) {
-            this.logger.warn(`Couldn't comment on post by ${item.user?.username}`)
-            console.warn(error)
+            await this.checkError(error, `Couldn't comment on post by ${item.user?.username}`)
         }
     }
 
@@ -314,6 +348,29 @@ export class Bot extends EventEmitter {
     private randomComment (): string {
         return this.config.comments[Math.floor(Math.random() * this.config.comments.length)]
     }
+    
+    /**
+     * Check if an error should trigger a ratelimit.
+     * 
+     * @private
+     * 
+     * @param error Error
+     * @param message Fallback error message
+     * 
+     * @returns {Promise<void>} Fullfilled when a triggered ratelimit is complete.
+     */
+    private async checkError (error: any, message: string): Promise<void> {
+        if (error.body && error.body.message === 'feedback_required') {
+            await this.ratelimit()
+        } else {
+            this.logger.warn(message)
+            try {
+                this.logger.warn(error)
+            } catch {
+                console.warn(error)
+            }
+        }
+    }
 
     /**
      * Logs a ratelimit error and waits the specified time.
@@ -325,7 +382,20 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled after the timeout. 
      */
     private async ratelimit (ms?: number): Promise<void> {
-        this.logger.warn('You have been ratelimited, pausing activity for an hour')
-        await wait(ms || 60 * 60 * 1000)
+        const timeout = this.ratelimitTimeout
+        this.ratelimitTimeout = this.ratelimitTimeout * RATELIMIT_MULT
+        this.logger.warn(`You have been ratelimited, pausing activity for ${prettyTime(timeout)}`)
+        await wait(ms || timeout)
+    }
+
+    /**
+     * Resets the ratelimit timeout.
+     * 
+     * @private
+     * 
+     * @returns {void}
+     */
+    private resetRatelimit (): void {
+        this.ratelimitTimeout = RATELIMIT_TIMEOUT
     }
 }
