@@ -11,5 +11,5 @@ install:
   - npm ci
 script:
   - npm run build
-  - npm run build:compile
+# - npm run build:compile
 # - npm run test
