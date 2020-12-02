@@ -1,6 +1,6 @@
 {
   "name": "instagram-commenter",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "description": "An API library for building Instagram comment bots.",
   "bin": "lib/cli.js",
   "main": "lib/index.js",
