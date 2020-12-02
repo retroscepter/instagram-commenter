@@ -169,17 +169,18 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled when the posts are added to the queue.
      */
     public async getFeed (): Promise<void> {
+        const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
+
         try {
             const items = await this.client.timeline.get({ reason: 'pull_to_refresh' })
             const filtered = items.filter(item => !item.liked)
             for (const item of filtered) await this.queueItem(item)
-            this.logger.info(`Refreshed feed and queued ${filtered.length} items`)
+            this.logger.info(`Refreshed feed and queued ${filtered.length} items, next in ${Math.round(timeout / 1000)}s`)
         } catch (error) {
             this.logger.warn(`Couldn't refresh feed`)
             this.logger.warn(error)
         }
 
-        const timeout = 1000 * 60 * (this.config.feedRefreshInterval || FEED_REFRESH_INTERVAL)
         setTimeout(this.getFeed.bind(this), timeout)
     }
 
@@ -215,7 +216,7 @@ export class Bot extends EventEmitter {
                 (this.config.maxLikeTimeout || MAX_LIKE_TIMEOUT) * 1000
             )
             await this.client.media.like({ mediaId: item.id, doubleTap: true, module: { name: 'feed_timeline' }})
-            await this.logger.info(`Liked post by ${item.user?.username}, waiting ${timeout / 1000} seconds`)
+            await this.logger.info(`Liked post by ${item.user?.username}, waiting ${Math.round(timeout / 1000)}s`)
             await wait(timeout)
         } catch (error) {
             this.logger.warn(`Couldn't like post by ${item.user?.username}`)
@@ -238,7 +239,7 @@ export class Bot extends EventEmitter {
                 (this.config.maxCommentTimeout || MAX_COMMENT_TIMEOUT) * 1000
             )
             await this.client.media.comment({ mediaId: item.id, text: text || this.randomComment() })
-            await this.logger.info(`Commented on post by ${item.user?.username}, waiting ${timeout / 1000} seconds`)
+            await this.logger.info(`Commented on post by ${item.user?.username}, waiting ${Math.round(timeout / 1000)}s`)
             await wait(timeout)
         } catch (error) {
             this.logger.warn(`Couldn't comment on post by ${item.user?.username}`)
