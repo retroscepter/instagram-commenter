@@ -3,6 +3,12 @@ import { Logger } from 'tslog'
 import { EventEmitter } from 'events'
 import { Client, Media } from 'instagram-connect'
 
+const MIN_LIKE_TIMEOUT = 10
+const MAX_LIKE_TIMEOUT = 30
+const MIN_COMMENT_TIMEOUT = 60
+const MAX_COMMENT_TIMEOUT = 180
+const FEED_REFRESH_INTERVAL = 5
+
 /**
  * Bot configuration.
  */
@@ -58,12 +64,6 @@ export function wait (ms: number): Promise<void> {
 export function rand (from: number, to: number): number {
     return from + Math.floor(Math.random() * (to - from))
 }
-
-const MIN_LIKE_TIMEOUT = 10
-const MAX_LIKE_TIMEOUT = 30
-const MIN_COMMENT_TIMEOUT = 60
-const MAX_COMMENT_TIMEOUT = 180
-const FEED_REFRESH_INTERVAL = 5
 
 /**
  * Represents an Instagram comment bot.
