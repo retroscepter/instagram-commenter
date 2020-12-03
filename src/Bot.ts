@@ -355,15 +355,11 @@ export class Bot extends EventEmitter {
      * @returns {Promise<void>} Fullfilled when a triggered ratelimit is complete.
      */
     private async checkError (error: any, message: string): Promise<void> {
-        if (error.body && error.body.message === 'feedback_required') {
+        if (error.body && error.body.spam) {
             await this.ratelimit()
         } else {
             this.logger.warn(message)
-            try {
-                this.logger.warn(error)
-            } catch {
-                console.warn(error)
-            }
+            console.warn(error)
         }
     }
 
