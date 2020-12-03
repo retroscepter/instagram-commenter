@@ -205,7 +205,6 @@ export class Bot extends EventEmitter {
             const items = await this.client.timeline.get({ reason: 'pull_to_refresh' })
             for (const item of items) await this.queueItem(item)
             this.logger.info(`Refreshed feed and queued ${this.queue.length - count} items, next in ${prettyTime(timeout)}`)
-            this.resetRatelimit()
         } catch (error) {
             await this.checkError(error, 'Couldn\'t refresh feed')
         }
@@ -247,7 +246,6 @@ export class Bot extends EventEmitter {
             await this.client.media.like({ mediaId: item.id, doubleTap: true, module: { name: 'feed_timeline' }})
             await this.logger.info(`Liked post by ${item.user?.username}, waiting ${prettyTime(timeout)}`)
             await wait(timeout)
-            this.resetRatelimit()
         } catch (error) {
             await this.checkError(error, `Couldn't like post by ${item.user?.username}`)
         }
