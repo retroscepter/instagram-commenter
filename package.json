@@ -18,14 +18,14 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/chewyiscrunchy/instagram-commenter.git"
+    "url": "git+https://github.com/octavetoast/instagram-commenter.git"
   },
   "author": "Braden Lamb",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/chewyiscrunchy/instagram-commenter/issues"
+    "url": "https://github.com/octavetoast/instagram-commenter/issues"
   },
-  "homepage": "https://github.com/chewyiscrunchy/instagram-commenter#readme",
+  "homepage": "https://github.com/octavetoast/instagram-commenter#readme",
   "dependencies": {
     "commander": "^6.2.0",
     "inquirer": "^7.3.3",
