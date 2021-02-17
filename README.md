@@ -1,4 +1,4 @@
-# instagram-commenter [![Build Status](https://travis-ci.com/chewyiscrunchy/instagram-commenter.svg?branch=main)](https://travis-ci.com/chewyiscrunchy/instagram-commenter) [![view on npm](http://img.shields.io/npm/v/instagram-commenter.svg)](https://www.npmjs.org/package/instagram-commenter)
+# instagram-commenter [![Build Status](https://travis-ci.com/octavetoast/instagram-commenter.svg?branch=main)](https://travis-ci.com/octavetoast/instagram-commenter) [![view on npm](http://img.shields.io/npm/v/instagram-commenter.svg)](https://www.npmjs.org/package/instagram-commenter)
 
 A CLI tool and API that automatically comments on posts in an Instagram account's feed.
 
